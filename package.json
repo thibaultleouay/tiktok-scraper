@@ -50,6 +50,7 @@
     },
     "scripts": {
         "build": "rimraf build && tsc",
+        "prepare": "npm run build",
         "docker:build": "tsc",
         "format": "prettier --config ./.prettierrc.js --write './src/**/*.ts'",
         "lint": "eslint ./src/**/*.ts",
