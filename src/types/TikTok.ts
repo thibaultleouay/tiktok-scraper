@@ -38,17 +38,20 @@ export interface Options {
     filetype?: string;
     progress?: boolean;
     number?: number;
+    since?: number;
     noWaterMark?: boolean;
     remove?: string;
     fileName?: string;
     historyPath?: string;
+    throttleLimit?: number;
+    throttleInterval?: number;
     timeout?: number;
+    retry?: number;
     hdVideo?: boolean;
     randomUa?: boolean;
     webHookUrl?: string;
     method?: string;
     headers?: Headers;
-    verifyFp?: string;
 }
 export interface TikTokConstructor {
     download: boolean;
@@ -56,6 +59,7 @@ export interface TikTokConstructor {
     filetype: string;
     useTestEndpoints?: boolean;
     proxy: string[] | string;
+    strictSSL?: boolean;
     asyncDownload: number;
     asyncScraping: number;
     cli?: boolean;
@@ -65,6 +69,7 @@ export interface TikTokConstructor {
     bulk?: boolean;
     input: string;
     number: number;
+    since: number;
     type: ScrapeType;
     by_user_id?: boolean;
     store_history?: boolean;
@@ -72,14 +77,16 @@ export interface TikTokConstructor {
     noWaterMark?: boolean;
     fileName?: string;
     timeout?: number;
+    retry?: number;
     test?: boolean;
     hdVideo?: boolean;
     signature?: string;
     webHookUrl?: string;
     method?: string;
     headers: Headers;
-    verifyFp?: string;
     sessionList?: string[];
+    throttleLimit?: number;
+    throttleInterval?: number;
 }
 
 export interface Hashtags {
@@ -172,4 +179,5 @@ export interface Headers {
     'user-agent': string;
     referer?: string;
     cookie?: string;
+    x_tt_params?: string;
 }

@@ -1,6 +1,6 @@
 {
     "name": "tiktok-scraper",
-    "version": "1.4.23",
+    "version": "1.4.35",
     "description": "TikTok Scraper & Downloader. Scrape information from User, Trending and HashTag pages and download video posts",
     "main": "./build/index.js",
     "types": "./build/index.d.ts",
@@ -15,13 +15,17 @@
         "async": "^3.1.0",
         "bluebird": "^3.7.1",
         "canvas": "^2.7.0",
+        "debug": "^4.3.2",
         "jsdom": "^16.5.3",
         "json2csv": "4.5.1",
         "ora": "^4.0.2",
+        "p-retry": "^4.6.1",
+        "p-throttle": "^4.1.1",
         "progress": "^2.0.3",
-        "request": "^2.88.0",
+        "request": "^2.88.2",
         "request-promise": "^4.2.4",
         "socks-proxy-agent": "^5.0.0",
+        "tiktok-signature": "^1.5.0",
         "yargs": "^14.2.0"
     },
     "devDependencies": {

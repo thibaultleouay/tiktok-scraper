@@ -12,22 +12,13 @@ export = {
         'from-file',
         'userprofile',
     ],
+    chronologicalTypes: ['user'],
     history: ['user', 'hashtag', 'trend', 'music'],
     requiredSession: ['user', 'hashtag', 'trend', 'music'],
     sourceType: {
         user: 8,
         music: 11,
         trend: 12,
-    },
-    /**
-     * verifyFp is used to bypass captcha
-     * Currently this method is with hardcoded values
-     * later I or someone else will implement proper way to generate valid value
-     */
-    verifyFp: () => {
-        const variants = [];
-
-        return variants[Math.floor(Math.random() * variants.length)];
     },
     /**
      * Generate random user-agent with randon versions(fake)

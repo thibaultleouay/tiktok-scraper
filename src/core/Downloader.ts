@@ -2,7 +2,8 @@
 /* eslint-disable no-param-reassign */
 /* eslint-disable consistent-return */
 /* eslint-disable no-console */
-import request, { OptionsWithUri } from 'request';
+import debug from 'debug';
+import request, { OptionsWithUri, CookieJar } from 'request';
 import rp from 'request-promise';
 import { Agent } from 'http';
 import { createWriteStream, writeFile } from 'fs';
@@ -10,6 +11,7 @@ import { fromCallback } from 'bluebird';
 import archiver from 'archiver';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 import { forEachLimit } from 'async';
+import pRetry from 'p-retry';
 
 import { MultipleBar } from '../helpers';
 import { DownloaderConstructor, PostCollector, DownloadParams, Proxy, Headers } from '../types';
@@ -23,6 +25,8 @@ export class Downloader {
 
     private proxy: string[] | string;
 
+    private retry: number;
+
     public noWaterMark: boolean;
 
     public filepath: string;
@@ -31,7 +35,9 @@ export class Downloader {
 
     public headers: Headers;
 
-    constructor({ progress, proxy, noWaterMark, headers, filepath, bulk }: DownloaderConstructor) {
+    public cookieJar: CookieJar;
+
+    constructor({ progress, proxy, retry, noWaterMark, headers, filepath, bulk, cookieJar }: DownloaderConstructor) {
         this.progress = true || progress;
         this.progressBar = [];
         this.noWaterMark = noWaterMark;
@@ -39,7 +45,9 @@ export class Downloader {
         this.filepath = filepath;
         this.mbars = new MultipleBar();
         this.proxy = proxy;
+        this.retry = retry;
         this.bulk = bulk;
+        this.cookieJar = cookieJar;
     }
 
     /**
@@ -87,45 +95,59 @@ export class Downloader {
      * @param {*} item
      */
     public toBuffer(item: PostCollector): Promise<Buffer> {
-        return new Promise((resolve, reject) => {
-            const proxy = this.getProxy;
-            let r = request;
-            let barIndex;
-            let buffer = Buffer.from('');
-            if (proxy.proxy && !proxy.socks) {
-                r = request.defaults({ proxy: `http://${proxy.proxy}/` });
-            }
-            if (proxy.proxy && proxy.socks) {
-                r = request.defaults({ agent: (proxy.proxy as unknown) as Agent });
-            }
-            r.get({
-                url: item.videoUrlNoWaterMark ? item.videoUrlNoWaterMark : item.videoUrl,
-                headers: this.headers,
-            })
-                .on('response', response => {
-                    const len = parseInt(response.headers['content-length'] as string, 10);
-                    if (this.progress && !this.bulk && len) {
-                        barIndex = this.addBar(!!item.videoUrlNoWaterMark, len);
+        const url = item.videoUrlNoWaterMark ? item.videoUrlNoWaterMark : item.videoUrl;
+        debug('tiktok-scraper:Downloader:toBuffer')(url);
+        return pRetry(
+            () =>
+                new Promise((resolve, reject) => {
+                    const proxy = this.getProxy;
+                    let r = request;
+                    let barIndex;
+                    let buffer = Buffer.from('');
+                    if (proxy.proxy && !proxy.socks) {
+                        r = request.defaults({ proxy: `http://${proxy.proxy}/` });
                     }
-                    if (this.progress && !this.bulk && !len) {
-                        console.log(`Empty response! You can try again with a proxy! Can't download video: ${item.id}`);
+                    if (proxy.proxy && proxy.socks) {
+                        r = request.defaults({ agent: (proxy.proxy as unknown) as Agent });
                     }
-                })
-                .on('data', chunk => {
-                    if (chunk.length) {
-                        buffer = Buffer.concat([buffer, chunk as Buffer]);
-                        if (this.progress && !this.bulk && barIndex && barIndex.hasOwnProperty('tick')) {
-                            barIndex.tick(chunk.length, { id: item.id });
-                        }
-                    }
-                })
-                .on('end', () => {
-                    resolve(buffer);
-                })
-                .on('error', () => {
-                    reject(new Error(`Cant download video: ${item.id}. If you were using proxy, please try without it.`));
-                });
-        });
+
+                    r.get({
+                        url,
+                        headers: this.headers,
+                        jar: this.cookieJar,
+                    })
+                        .on('response', response => {
+                            const len = parseInt(response.headers['content-length'] as string, 10);
+                            if (this.progress && !this.bulk && len) {
+                                barIndex = this.addBar(!!item.videoUrlNoWaterMark, len);
+                            }
+                            if (this.progress && !this.bulk && !len) {
+                                console.log(`Empty response! You can try again with a proxy! Can't download video: ${item.id}`);
+                            }
+                        })
+                        .on('data', chunk => {
+                            if (chunk.length) {
+                                buffer = Buffer.concat([buffer, chunk as Buffer]);
+                                if (this.progress && !this.bulk && barIndex && barIndex.hasOwnProperty('tick')) {
+                                    barIndex.tick(chunk.length, { id: item.id });
+                                }
+                            }
+                        })
+                        .on('end', () => {
+                            resolve(buffer);
+                        })
+                        .on('error', () => {
+                            reject(new Error(`Cant download video: ${item.id}. If you were using proxy, please try without it.`));
+                        });
+                }),
+            {
+                retries: this.retry,
+                onFailedAttempt: error => {
+                    console.error(error);
+                    console.log(`\nAttempt ${error.attemptNumber} (of ${error.attemptNumber + error.retriesLeft}) to download ${url} has failed.`);
+                },
+            },
+        );
     }
 
     /**
@@ -193,16 +215,25 @@ export class Downloader {
         if (!url) {
             url = post.videoUrl;
         }
+
+        debug('tiktok-scraper:Downloader:downloadSingleVideo')(url);
         const options = ({
             uri: url,
             method: 'GET',
+            jar: this.cookieJar,
             headers: this.headers,
             encoding: null,
             ...(proxy.proxy && proxy.socks ? { agent: proxy.proxy } : {}),
             ...(proxy.proxy && !proxy.socks ? { proxy: `http://${proxy.proxy}/` } : {}),
         } as unknown) as OptionsWithUri;
 
-        const result = await rp(options);
+        const result = await pRetry(() => rp(options), {
+            retries: this.retry,
+            onFailedAttempt: error => {
+                console.error(error);
+                console.log(`\nAttempt ${error.attemptNumber} (of ${error.attemptNumber + error.retriesLeft}) to download ${url} has failed.`);
+            },
+        });
 
         await fromCallback(cb => writeFile(`${this.filepath}/${post.id}.mp4`, result, cb));
     }
